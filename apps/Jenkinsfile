@@ -62,7 +62,8 @@ pipeline {
                     script {
                         // 0. เปลี่ยน Host Port ของ Kind Cluster ให้ไม่ชนกับ Jenkins.local:8081 (PC)
                         sh "sed -i 's/hostPort: 8081/hostPort: 8082/g' kind-config.yaml"
-                        
+                        sh "sed -i 's/hostPort: 443/hostPort: 8443/g' kind-config.yaml"
+
                         // 1. สร้าง Cluster
                         sh "kind create cluster --config kind-config.yaml --name myapp-cluster"
 
