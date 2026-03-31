@@ -1,0 +1,129 @@
+pipeline {
+    agent any
+
+    triggers {
+        pollSCM('* * * * *')
+    }
+
+    environment {
+        DIR_APPS = 'apps'
+        DIR_K8S = 'k8s'
+        MY_REGISTRY = 'worawut2547'
+        DOCKER_IMAGE = 'myapp:latest'
+        KUBE_NAMESPACE = 'my-apps'
+        KUBE_DEPLOYMENT = 'myapp-deployment'
+        KUBE_SERVICE = 'myapp-svc'
+        KUBE_INGRESS = 'myapp-ingress'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                dir("${DIR_APPS}") {
+                    script {
+                        sh "docker build -t ${DOCKER_IMAGE} ."
+                    }
+                }
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                dir("${DIR_APPS}") {
+                    script {
+                        sh "docker tag ${DOCKER_IMAGE} ${MY_REGISTRY}/myapp:latest"
+                        sh "docker push ${MY_REGISTRY}/myapp:latest"
+                    }
+                }
+            }
+        }
+        stage('Identify Agent Environment') {
+            steps {
+                script {
+                    echo "--- Agent Information ---"
+                    // เช็กระบบปฏิบัติการ
+                    sh "uname -a" 
+                    // เช็กชื่อเครื่อง (Hostname)
+                    sh "hostname"
+                    // เช็ก User ที่ใช้รัน
+                    sh "whoami"
+                    // เช็กตำแหน่งที่เก็บ Workspace (Directory ปัจจุบัน)
+                    sh "pwd"
+                }
+            }
+        }
+        stage('Create Cluster Resources and Namespace') {
+            steps {
+                dir("${DIR_K8S}") {
+                    script {
+                        // 0. เปลี่ยน Host Port ของ Kind Cluster ให้ไม่ชนกับ Jenkins.local:8081 (PC)
+                        sh "sed -i 's/hostPort: 8081/hostPort: 8082/g' kind-config.yaml"
+                        sh "sed -i 's/hostPort: 443/hostPort: 8443/g' kind-config.yaml"
+
+                        // 1. สร้าง Cluster
+                        sh "kind delete cluster --name myapp-cluster || true" // ลบ Cluster เดิมถ้ามีอยู่แล้ว
+                        sh "kind create cluster --config kind-config.yaml --name myapp-cluster"
+
+                        // 2. รอจนกว่า Node จะ Ready
+                        echo "Waiting for cluster to be ready..."
+                        sh "kubectl wait --for=condition=Ready nodes --all --timeout=140s"
+
+                        // 3. ลงตัว ingress-nginx controller (ถ้ายังไม่ติดตั้ง)
+                        sh "kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml"
+
+                        // 3.1 รอจนกว่า Ingress Controller จะ Ready
+                        echo "Waiting for ingress-nginx controller to be available..."
+                        sh "kubectl wait --namespace ingress-nginx --for=condition=available deployment/ingress-nginx-controller --timeout=240s"
+                        sh "kubectl get pods -n ingress-nginx -o wide"
+
+                        // 3.2 Patch the ingress-nginx-controller
+                        echo "Patching ingress-nginx-controller..."
+                        sh  '''
+                            kubectl patch deployment ingress-nginx-controller -n ingress-nginx --type='json' -p='[{"op": "add", "path": "/spec/template/spec/nodeSelector/ingress-ready", "value": "true"}]'
+                            '''
+                        sh "kubectl get pods -n ingress-nginx -o wide"
+
+                        // 4. สร้าง Namespace
+                        sh "kubectl apply -f namespace.yaml"
+                    }
+                }
+            }
+        }
+        stage('Deploy to Kubernetes') {
+            steps {
+                dir("${DIR_K8S}/myapp") {
+                    script {
+                        sh "kubectl apply -f deploy.yaml"
+                        sh "kubectl get deployments -n ${KUBE_NAMESPACE}"
+
+                        sh "kubectl apply -f service.yaml"
+                        sh "kubectl get services -n ${KUBE_NAMESPACE}"
+
+                        // --- เพิ่มบรรทัดนี้เพื่อแก้ปัญหา Webhook บล็อกการทำงาน ---
+                        echo "Removing ingress-nginx admission webhook to prevent validation errors..."
+                        sh "kubectl delete -A ValidatingWebhookConfiguration ingress-nginx-admission || true"
+                        
+                        sh "kubectl apply -f ingress.yaml"
+                        sh "kubectl get ingress -n ${KUBE_NAMESPACE}"
+                        sh "kubectl set image deployment/${KUBE_DEPLOYMENT} myapp-container=${MY_REGISTRY}/myapp:latest -n ${KUBE_NAMESPACE}"
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            echo 'This will always run, regardless of the build result.'
+        }
+        success {
+            echo '✅ SUCCESS: The pipeline completed successfully.'
+        }
+        failure {
+            echo '❌ FAILURE: The pipeline failed. Please check the logs for details.'
+        }
+    }
+}
