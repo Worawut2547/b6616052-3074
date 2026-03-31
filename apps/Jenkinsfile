@@ -43,9 +43,9 @@ pipeline {
         }
         stage('Deploy to Kubernetes') {
             steps {
-                dir("${DIR_K8S}") {
+                dir("${DIR_K8S}/myapp") {
                     script {
-                        sh "kubectl apply -R -f ../k8s/myapp/"
+                        sh "kubectl apply -R -f ."
                         sh "kubectl set image deployment/${KUBE_DEPLOYMENT} myapp-container=${MY_REGISTRY}/myapp:latest -n ${KUBE_NAMESPACE}"
                     }
                 }
