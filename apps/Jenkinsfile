@@ -41,6 +41,21 @@ pipeline {
                 }
             }
         }
+        stage('Identify Agent Environment') {
+            steps {
+                script {
+                    echo "--- Agent Information ---"
+                    // เช็กระบบปฏิบัติการ
+                    sh "uname -a" 
+                    // เช็กชื่อเครื่อง (Hostname)
+                    sh "hostname"
+                    // เช็ก User ที่ใช้รัน
+                    sh "whoami"
+                    // เช็กตำแหน่งที่เก็บ Workspace (Directory ปัจจุบัน)
+                    sh "pwd"
+                }
+            }
+        }
         stage('Create Cluster Resources and Namespace') {
             steps {
                 dir("${DIR_K8S}") {
@@ -62,7 +77,8 @@ pipeline {
             steps {
                 dir("${DIR_K8S}/myapp") {
                     script {
-                        sh "kubectl apply -R -f ."
+                        sh "kubectl apply -f deployment.yaml"
+                        sh "kubectl apply -f service.yaml"
                         sh "kubectl set image deployment/${KUBE_DEPLOYMENT} myapp-container=${MY_REGISTRY}/myapp:latest -n ${KUBE_NAMESPACE}"
                     }
                 }
