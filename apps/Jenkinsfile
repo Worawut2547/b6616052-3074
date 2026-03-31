@@ -65,6 +65,7 @@ pipeline {
                         sh "sed -i 's/hostPort: 443/hostPort: 8443/g' kind-config.yaml"
 
                         // 1. สร้าง Cluster
+                        sh "kind delete cluster --name myapp-cluster || true" // ลบ Cluster เดิมถ้ามีอยู่แล้ว
                         sh "kind create cluster --config kind-config.yaml --name myapp-cluster"
 
                         // 2. รอจนกว่า Node จะ Ready
