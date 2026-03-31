@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins-deployment
+  namespace: ci-cd
+  labels:
+    app: jenkins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jenkins
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      securityContext:
+        runAsUser: 0
+        fsGroup: 1000
+      containers:
+        - name: jenkins-container
+          image: jenkins/jenkins:latest
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: jenkins-volume
+              mountPath: /var/jenkins_home
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+      volumes:
+        - name: jenkins-volume
+          persistentVolumeClaim:
+            claimName: jenkins-volume-claim
