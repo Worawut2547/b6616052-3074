@@ -5,41 +5,54 @@ pipeline {
         pollSCM('* * * * *')
     }
 
+    environment {
+        MY_REGISTRY = 'worawut2547'
+        DOCKER_IMAGE = 'myapp:latest'
+        KUBE_NAMESPACE = 'my-apps'
+        KUBE_DEPLOYMENT = 'myapp-deployment'
+        KUBE_SERVICE = 'myapp-svc'
+        KUBE_INGRESS = 'myapp-ingress'
+    }
+
     stages {
-        stage('Preparation') {
-            steps {
-                echo 'Checking system resources...'
+        stage('Checkout') {
+            step {
+                checkout scm
             }
         }
-        stage('Simulate Work') {
+        stage('Build Docker Image') {
             steps {
                 script {
-                    echo 'Processing ...'
-                    sleep 5
-                    echo 'Work completed.'
+                    sh "docker build -t ${DOCKER_IMAGE} ."
                 }
             }
         }
-        stage('Result Decision') {
+        stage('Push Docker Image') {
             steps {
                 script {
-                    // --- วิธีทดสอบ ---
-                    // หากต้องการให้ Success: ให้ใส่เลข 0
-                    // หากต้องการให้ Failure: ให้เปลี่ยนเลข 0 เป็นเลขอื่น เช่น 1
-                    sh "exit 0"
+                    sh "docker tag ${DOCKER_IMAGE} ${MY_REGISTRY}/myapp:latest"
+                    sh "docker push ${MY_REGISTRY}/myapp:latest"
+                }
+            }
+        }
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    sh "kubectl apply -R -f ../k8s/myapp/"
+                    sh "kubectl set image deployment/${KUBE_DEPLOYMENT} myapp-container=${MY_REGISTRY}/myapp:latest -n ${KUBE_NAMESPACE}"
                 }
             }
         }
     }
     post {
         always {
-            echo 'I always run, regardless of the build result.'
+            echo 'This will always run, regardless of the build result.'
         }
         success {
-            echo '✅ SUCCESS: The pipeline finished successfully.'
+            echo '✅ SUCCESS: The pipeline completed successfully.'
         }
         failure {
-            echo '❌ FAILURE: Something went wrong in the pipeline.'
+            echo '❌ FAILURE: The pipeline failed. Please check the logs for details.'
         }
     }
 }
