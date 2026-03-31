@@ -71,7 +71,15 @@ pipeline {
                         echo "Waiting for cluster to be ready..."
                         sh "kubectl wait --for=condition=Ready nodes --all --timeout=300s"
 
-                        // 3. สร้าง Namespace
+                        // 3. ลงตัว ingress-nginx controller (ถ้ายังไม่ติดตั้ง)
+                        sh "kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml"
+                        // 3.1 รอจนกว่า Ingress Controller จะ Ready
+                        echo "Waiting for ingress-nginx controller to be ready..."
+                        sh "kubectl wait --namespace ingress-nginx --for=condition=Ready pod --all --timeout=300s"
+                        // 3.2 Patch the ingress-nginx-controller deployment to label control-plane node
+                        sh "kubectl patch deployment ingress-nginx-controller -n ingress-nginx --type='json' -p='[{"op": "add", "path": "/spec/template/spec/nodeSelector/ingress-ready", "value": "true"}]'"
+
+                        // 4. สร้าง Namespace
                         sh "kubectl apply -f namespace.yaml"
                     }
                 }
@@ -81,8 +89,9 @@ pipeline {
             steps {
                 dir("${DIR_K8S}/myapp") {
                     script {
-                        sh "kubectl apply -f deployment.yaml"
+                        sh "kubectl apply -f deploy.yaml"
                         sh "kubectl apply -f service.yaml"
+                        sh "kubectl apply -f ingress.yaml"
                         sh "kubectl set image deployment/${KUBE_DEPLOYMENT} myapp-container=${MY_REGISTRY}/myapp:latest -n ${KUBE_NAMESPACE}"
                     }
                 }
