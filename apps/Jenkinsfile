@@ -7,12 +7,12 @@ pipeline {
 
     stages {
         stage('Preparation') {
-            step {
+            steps {
                 echo 'Checking system resources...'
             }
         }
         stage('Simulate Work') {
-            step {
+            steps {
                 script {
                     echo 'Processing ...'
                     sleep 5
@@ -21,7 +21,7 @@ pipeline {
             }
         }
         stage('Result Decision') {
-            step {
+            steps {
                 script {
                     // --- วิธีทดสอบ ---
                     // หากต้องการให้ Success: ให้ใส่เลข 0
