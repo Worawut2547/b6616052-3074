@@ -1,0 +1,45 @@
+pipeline {
+    agent any
+
+    triggers {
+        pollSCM('* * * * *')
+    }
+
+    stages {
+        stage('Preparation') {
+            step {
+                echo 'Checking system resources...'
+            }
+        }
+        stage('Simulate Work') {
+            step {
+                script {
+                    echo 'Processing ...'
+                    sleep 5
+                    echo 'Work completed.'
+                }
+            }
+        }
+        stage('Result Decision') {
+            step {
+                script {
+                    // --- วิธีทดสอบ ---
+                    // หากต้องการให้ Success: ให้ใส่เลข 0
+                    // หากต้องการให้ Failure: ให้เปลี่ยนเลข 0 เป็นเลขอื่น เช่น 1
+                    sh "exit 0"
+                }
+            }
+        }
+    }
+    post {
+        always {
+            echo 'I always run, regardless of the build result.'
+        }
+        success {
+            echo '✅ SUCCESS: The pipeline finished successfully.'
+        }
+        failure {
+            echo '❌ FAILURE: Something went wrong in the pipeline.'
+        }
+    }
+}
