@@ -41,6 +41,23 @@ pipeline {
                 }
             }
         }
+        stage('Create Cluster Resources and Namespace') {
+            steps {
+                dir("${DIR_K8S}") {
+                    script {
+                        // 1. สร้าง Cluster
+                        sh "kind create cluster --config kind-config.yaml --name myapp-cluster"
+
+                        // 2. รอจนกว่า Node จะ Ready
+                        echo "Waiting for cluster to be ready..."
+                        sh "kubectl wait --for=condition=Ready nodes --all --timeout=300s"
+
+                        // 3. สร้าง Namespace
+                        sh "kubectl apply -f namespace.yaml"
+                    }
+                }
+            }
+        }
         stage('Deploy to Kubernetes') {
             steps {
                 dir("${DIR_K8S}/myapp") {
